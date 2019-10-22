@@ -94,7 +94,7 @@ LEBDEF void leb_DecodeNodeAttributeArray(const leb_Node node,
 //// end header file ///////////////////////////////////////////////////////////
 #endif // LEB_INCLUDE_LEB_H
 
-#if 1//def LEB_IMPLEMENTATION
+#ifdef LEB_IMPLEMENTATION
 
 #ifndef LEB_ASSERT
 #    include <assert.h>
