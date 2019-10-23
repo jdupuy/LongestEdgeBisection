@@ -813,10 +813,9 @@ leb_DecodeSameDepthNeighborIDs(const leb_Node node)
  * SameDepthNeighborIDs -- Computes the IDs of the same-level neighbors of a node
  *
  */
-LEBDEF
-leb_SameDepthNeighborIDs leb_GetSameDepthNeighborIDs(
-    const leb_NodeAndNeighbors nodes
-) {
+LEBDEF leb_SameDepthNeighborIDs 
+leb_GetSameDepthNeighborIDs(const leb_NodeAndNeighbors nodes)
+{
     uint32_t edgeID = nodes.edge.id << (nodes.node.depth - nodes.edge.depth);
     uint32_t leftID = nodes.left.id >> (nodes.left.depth - nodes.node.depth);
     uint32_t rightID = nodes.right.id >> (nodes.right.depth - nodes.node.depth);
