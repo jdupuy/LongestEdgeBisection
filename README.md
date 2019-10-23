@@ -8,4 +8,4 @@ see the LongestEdgeBisectionDemos repository.
 
 ### License
 
-See the License.txt file.
+See the LICENSE.txt file.
