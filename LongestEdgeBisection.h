@@ -80,10 +80,13 @@ LEBDEF leb_SameDepthNeighborIDs
        leb_DecodeSameDepthNeighborIDs(const leb_Node node);
 LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node);
 
-// Subdivision routine O(depth)
+// subdivision routine O(depth)
 LEBDEF void leb_DecodeNodeAttributeArray(const leb_Node node,
                                          int attributeArraySize,
                                          float attributeArray[][3]);
+// intersection test O(depth)
+LEBDEF leb_Node leb_BoundingNode(const leb_Memory *leb, float x, float y);
+
 
 #ifdef __cplusplus
 } // extern "C"
@@ -1108,6 +1111,36 @@ leb_DecodeNodeAttributeArray(
         attributeArray[i][1] = leb__DotProduct(3, m[1], attributeVector);
         attributeArray[i][2] = leb__DotProduct(3, m[2], attributeVector);
     }
+}
+
+
+/*******************************************************************************
+ * BoundingNode -- Compute the triangle that bounds the point (x, y)
+ *
+ */
+LEBDEF leb_Node leb_BoundingNode(const leb_Memory *leb, float x, float y)
+{
+    leb_Node node = {0u, 0};
+
+    if (x >= 0.0f && y >= 0.0f && x + y <= 1.0f) {
+        node = {1u, 0};
+
+        while (!leb__HasNode(leb, node)) {
+            float s = x, t = y;
+
+            if (s < t) {
+                node = leb__LeftChildNode(node);
+                x = (1.0f - s - t);
+                y = (t - s);
+            } else {
+                node = leb__RightChildNode(node);
+                x = (s - t);
+                y = (1.0f - s - t);
+            }
+        }
+    }
+
+    return node;
 }
 
 #endif // LEB_IMPLEMENTATION
