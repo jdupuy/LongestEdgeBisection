@@ -312,7 +312,11 @@ bool leb_IsNullNode(in const leb_Node n)
  */
 leb_Node leb_ParentNode(in const leb_Node node)
 {
-    return leb_Node(node.id >> 1u, node.depth - 1);
+    if (leb_IsNullNode(node)) {
+        return leb_Node(0u, 0);
+    } else {
+        return leb_Node(node.id >> 1u, node.depth - 1);
+    }
 }
 
 
@@ -394,6 +398,7 @@ void leb__SplitNode(in const leb_Node node)
 {
     leb__SetNodeBitValue(leb__RightChildNode(node), 1u);
 }
+
 
 /*******************************************************************************
  * Merge -- Merges the node with its neighbour
@@ -519,6 +524,9 @@ leb__SplitNodeIDs(in const leb_SameDepthNeighborIDs nodeIDs, uint splitBit)
  */
 leb_SameDepthNeighborIDs leb_DecodeSameDepthNeighborIDs(in const leb_Node node)
 {
+    if (node.depth == 0)
+        return leb_SameDepthNeighborIDs(0u, 0u, 0u, 1u);
+
     uint b = leb__GetBitValue(node.id, node.depth - 1);
     leb_SameDepthNeighborIDs nodeIDs = leb_SameDepthNeighborIDs(0u, 0u, 3u - b, 2u + b);
 
@@ -549,7 +557,7 @@ leb_GetSameDepthNeighborIDs(in const leb_NodeAndNeighbors nodes)
  * EdgeNode -- Computes the neighbour of the input node wrt to its longest edge
  *
  */
-leb_Node EdgeNode(in const leb_Node node)
+leb_Node leb__EdgeNode(in const leb_Node node)
 {
     return leb_Node(leb_DecodeSameDepthNeighborIDs(node).edge, node.depth);
 }
@@ -562,16 +570,17 @@ leb_Node EdgeNode(in const leb_Node node)
 void leb_SplitNodeConforming(in const leb_Node node)
 {
     if (!leb_IsLeafNode(node)) {
+        const uint minNodeID = 1u << 1;
         leb_Node nodeIterator = node;
 
         leb__SplitNode(nodeIterator);
-        nodeIterator = EdgeNode(nodeIterator);
+        nodeIterator = leb__EdgeNode(nodeIterator);
 
-        while (nodeIterator.id > 3u) {
+        while (nodeIterator.id >= minNodeID) {
             leb__SplitNode(nodeIterator);
             nodeIterator = leb_ParentNode(nodeIterator);
             leb__SplitNode(nodeIterator);
-            nodeIterator = EdgeNode(nodeIterator);
+            nodeIterator = leb__EdgeNode(nodeIterator);
         }
     }
 }
