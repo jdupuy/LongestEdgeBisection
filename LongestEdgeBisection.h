@@ -29,7 +29,7 @@ extern "C" {
 #include <stdint.h>
 
 // data structures
-typedef struct leb_Memory leb_Memory;
+typedef struct leb_Heap leb_Heap;
 typedef struct {
     uint32_t id;
     int32_t depth;
@@ -46,36 +46,36 @@ typedef struct {
 
 // ctor / dtor
 // Note: maxDepth *must* be at least 5
-LEBDEF leb_Memory *leb_Create(int maxDepth);
-LEBDEF leb_Memory *leb_CreateMinMax(int minDepth, int maxDepth);
-LEBDEF void leb_Release(leb_Memory *leb);
+LEBDEF leb_Heap *leb_Create(int maxDepth);
+LEBDEF leb_Heap *leb_CreateMinMax(int minDepth, int maxDepth);
+LEBDEF void leb_Release(leb_Heap *leb);
 
 // loaders
-LEBDEF void leb_ResetToRoot(leb_Memory *leb);
-LEBDEF void leb_ResetToLeaf(leb_Memory *leb);
-LEBDEF void leb_ResetToDepth(leb_Memory *leb, int depth);
+LEBDEF void leb_ResetToRoot(leb_Heap *leb);
+LEBDEF void leb_ResetToLeaf(leb_Heap *leb);
+LEBDEF void leb_ResetToDepth(leb_Heap *leb, int depth);
 
 // manipulation
-LEBDEF void leb_ComputeSumReduction(leb_Memory *leb);
-LEBDEF void leb_SplitNodeConforming(leb_Memory *leb, const leb_Node node);
-LEBDEF void leb_MergeNodeConforming(leb_Memory *leb,
+LEBDEF void leb_ComputeSumReduction(leb_Heap *leb);
+LEBDEF void leb_SplitNodeConforming(leb_Heap *leb, const leb_Node node);
+LEBDEF void leb_MergeNodeConforming(leb_Heap *leb,
                                     const leb_Node node,
                                     const leb_DiamondParent diamond);
 
 // O(1) queries
-LEBDEF uint32_t leb_NodeCount(const leb_Memory *leb);
-LEBDEF bool leb_IsLeafNode(const leb_Memory *leb, const leb_Node node);
-LEBDEF bool leb_IsRootNode(const leb_Memory *leb, const leb_Node node);
+LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb);
+LEBDEF bool leb_IsLeafNode(const leb_Heap *leb, const leb_Node node);
+LEBDEF bool leb_IsRootNode(const leb_Heap *leb, const leb_Node node);
 LEBDEF bool leb_IsNullNode(                       const leb_Node node);
 LEBDEF leb_Node leb_ParentNode(const leb_Node node);
 LEBDEF leb_SameDepthNeighborIDs
        leb_GetSameDepthNeighborIDs(const leb_NodeAndNeighbors nodes);
 
 // O(depth) queries
-LEBDEF leb_Node leb_DecodeNode(const leb_Memory *leb, uint32_t nodeID);
-LEBDEF uint32_t leb_EncodeNode(const leb_Memory *leb, const leb_Node node);
+LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t nodeID);
+LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node);
 LEBDEF leb_NodeAndNeighbors
-       leb_DecodeNodeAndNeighbors(const leb_Memory *leb, uint32_t nodeID);
+       leb_DecodeNodeAndNeighbors(const leb_Heap *leb, uint32_t nodeID);
 LEBDEF leb_SameDepthNeighborIDs
        leb_DecodeSameDepthNeighborIDs(const leb_Node node);
 LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node);
@@ -85,7 +85,7 @@ LEBDEF void leb_DecodeNodeAttributeArray(const leb_Node node,
                                          int attributeArraySize,
                                          float attributeArray[][3]);
 // intersection test O(depth)
-LEBDEF leb_Node leb_BoundingNode(const leb_Memory *leb, float x, float y);
+LEBDEF leb_Node leb_BoundingNode(const leb_Heap *leb, float x, float y);
 
 
 #ifdef __cplusplus
@@ -124,7 +124,7 @@ LEBDEF leb_Node leb_BoundingNode(const leb_Memory *leb, float x, float y);
  * Leb Buffer Data structure
  *
  */
-struct leb_Memory {
+struct leb_Heap {
     uint32_t *buffer;
     int32_t minDepth, maxDepth;
 };
@@ -205,7 +205,7 @@ leb__BitFieldExtract(
  *
  */
 static uint32_t
-leb__NodeToLeafBitID(const leb_Memory *leb, const leb_Node node)
+leb__NodeToLeafBitID(const leb_Heap *leb, const leb_Node node)
 {
     return (node.id << (leb->maxDepth - node.depth)) + (2u << leb->maxDepth);
 }
@@ -217,7 +217,7 @@ leb__NodeToLeafBitID(const leb_Memory *leb, const leb_Node node)
  */
 static void
 leb__SetNodeBitValue(
-    leb_Memory *leb,
+    leb_Heap *leb,
     const leb_Node node,
     const uint32_t bitValue
 ) {
@@ -232,7 +232,7 @@ leb__SetNodeBitValue(
  * GetNodeBitValue -- Returns the value of the bit associated to a leaf node
  *
  */
-static uint32_t leb__GetNodeBitValue(const leb_Memory *leb, const leb_Node node)
+static uint32_t leb__GetNodeBitValue(const leb_Heap *leb, const leb_Node node)
 {
     uint32_t bitID = leb__NodeToLeafBitID(leb, node);
 
@@ -290,7 +290,7 @@ static uint32_t leb__BufferByteSize(uint32_t lebMaxDepth)
  *
  */
 static inline uint32_t
-leb__DataBitID(const leb_Memory *leb, uint32_t nodeID, int32_t nodeDepth)
+leb__DataBitID(const leb_Heap *leb, uint32_t nodeID, int32_t nodeDepth)
 {
     uint32_t tmp = 1u << nodeDepth;
     int32_t bitCount = 1u + leb->maxDepth - nodeDepth;
@@ -306,7 +306,7 @@ leb__DataBitID(const leb_Memory *leb, uint32_t nodeID, int32_t nodeDepth)
  *
  */
 static inline int32_t
-leb__DataBitSize(const leb_Memory *leb, int32_t nodeDepth)
+leb__DataBitSize(const leb_Heap *leb, int32_t nodeDepth)
 {
     return leb->maxDepth - nodeDepth + 1;
 }
@@ -322,7 +322,7 @@ leb__DataBitSize(const leb_Memory *leb, int32_t nodeDepth)
  */
 static void
 leb__SetDataExplicit(
-    leb_Memory *leb,
+    leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     int32_t bitCount,
@@ -350,7 +350,7 @@ leb__SetDataExplicit(
 
 static void
 leb__SetData(
-    leb_Memory *leb,
+    leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     uint32_t bitData
@@ -371,7 +371,7 @@ leb__SetData(
  */
 static uint32_t
 leb__GetDataExplicit(
-    const leb_Memory *leb,
+    const leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     int32_t bitCount
@@ -393,7 +393,7 @@ leb__GetDataExplicit(
 
 static uint32_t
 leb__GetData(
-    const leb_Memory *leb,
+    const leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth
 ) {
@@ -407,7 +407,7 @@ leb__GetData(
  * ClearData -- Resets the data buffer stored by a LEB
  *
  */
-static void leb__ClearBuffer(leb_Memory *leb)
+static void leb__ClearBuffer(leb_Heap *leb)
 {
     memset(leb->buffer, 0, leb__BufferByteSize(leb->maxDepth));
 }
@@ -417,13 +417,13 @@ static void leb__ClearBuffer(leb_Memory *leb)
  * Buffer Ctor
  *
  */
-LEBDEF leb_Memory *leb_CreateMinMax(int minDepth, int maxDepth)
+LEBDEF leb_Heap *leb_CreateMinMax(int minDepth, int maxDepth)
 {
     LEB_ASSERT(maxDepth >=  5 && "maxDepth must be at least 5");
     LEB_ASSERT(maxDepth <= 29 && "maxDepth must be at most 29");
     LEB_ASSERT(minDepth >=  0 && "minDepth must be at least 0");
     LEB_ASSERT(minDepth <= maxDepth && "minDepth must be less than maxDepth");
-    leb_Memory *leb = (leb_Memory *)LEB_MALLOC(sizeof(*leb));
+    leb_Heap *leb = (leb_Heap *)LEB_MALLOC(sizeof(*leb));
 
     leb->minDepth = minDepth;
     leb->maxDepth = maxDepth;
@@ -434,7 +434,7 @@ LEBDEF leb_Memory *leb_CreateMinMax(int minDepth, int maxDepth)
     return leb;
 }
 
-LEBDEF leb_Memory *leb_Create(int maxDepth)
+LEBDEF leb_Heap *leb_Create(int maxDepth)
 {
     return leb_CreateMinMax(0, maxDepth);
 }
@@ -444,7 +444,7 @@ LEBDEF leb_Memory *leb_Create(int maxDepth)
  * Buffer Dtor
  *
  */
-LEBDEF void leb_Release(leb_Memory *leb)
+LEBDEF void leb_Release(leb_Heap *leb)
 {
     LEB_FREE(leb->buffer);
     LEB_FREE(leb);
@@ -455,7 +455,7 @@ LEBDEF void leb_Release(leb_Memory *leb)
  * ResetToDepth -- Initializes a LEB to its a specific subdivision level
  *
  */
-LEBDEF void leb_ResetToDepth(leb_Memory *leb, int depth)
+LEBDEF void leb_ResetToDepth(leb_Heap *leb, int depth)
 {
     LEB_ASSERT(depth >= leb->minDepth && "depth must be at least equal to minDepth");
     LEB_ASSERT(depth <= leb->maxDepth && "depth must be at most equal to maxDepth");
@@ -478,7 +478,7 @@ LEBDEF void leb_ResetToDepth(leb_Memory *leb, int depth)
  * ResetToRoot -- Initializes a LEB to its minimum subdivision level
  *
  */
-LEBDEF void leb_ResetToRoot(leb_Memory *leb)
+LEBDEF void leb_ResetToRoot(leb_Heap *leb)
 {
     leb_ResetToDepth(leb, leb->minDepth);
 }
@@ -488,7 +488,7 @@ LEBDEF void leb_ResetToRoot(leb_Memory *leb)
  * ResetToLeaf -- Initializes a LEB to its maximum subdivision level
  *
  */
-LEBDEF void leb_ResetToLeaf(leb_Memory *leb)
+LEBDEF void leb_ResetToLeaf(leb_Heap *leb)
 {
     leb_ResetToDepth(leb, leb->maxDepth);
 }
@@ -498,7 +498,7 @@ LEBDEF void leb_ResetToLeaf(leb_Memory *leb)
  * UpdateBuffer -- Sums the 2 elements below the current slot
  *
  */
-LEBDEF void leb_ComputeSumReduction(leb_Memory *leb)
+LEBDEF void leb_ComputeSumReduction(leb_Heap *leb)
 {
     int depth = leb->maxDepth;
     uint32_t minNodeID = (1u << depth);
@@ -567,7 +567,7 @@ LEBDEF void leb_ComputeSumReduction(leb_Memory *leb)
  * IsLeafNode -- Checks if a node is a leaf node
  *
  */
-LEBDEF bool leb_IsLeafNode(const leb_Memory *leb, const leb_Node n)
+LEBDEF bool leb_IsLeafNode(const leb_Heap *leb, const leb_Node n)
 {
     return (n.depth == leb->maxDepth);
 }
@@ -577,7 +577,7 @@ LEBDEF bool leb_IsLeafNode(const leb_Memory *leb, const leb_Node n)
  * IsRootNode -- Checks if a node is a root node
  *
  */
-LEBDEF bool leb_IsRootNode(const leb_Memory *leb, const leb_Node n)
+LEBDEF bool leb_IsRootNode(const leb_Heap *leb, const leb_Node n)
 {
     return (n.depth == leb->minDepth);
 }
@@ -681,7 +681,7 @@ static leb_Node leb__LeftChildNode(const leb_Node node)
  * Split -- Subdivides a node in two
  *
  */
-static void leb__SplitNode(leb_Memory *leb, const leb_Node node)
+static void leb__SplitNode(leb_Heap *leb, const leb_Node node)
 {
     leb__SetNodeBitValue(leb, leb__RightChildNode(node), 1u);
 }
@@ -691,7 +691,7 @@ static void leb__SplitNode(leb_Memory *leb, const leb_Node node)
  * Merge -- Merges the node with its neighbour
  *
  */
-static void leb__MergeNode(leb_Memory *leb, const leb_Node node)
+static void leb__MergeNode(leb_Heap *leb, const leb_Node node)
 {
     leb__SetNodeBitValue(leb, leb__RightSiblingNode(node), 0u);
 }
@@ -701,7 +701,7 @@ static void leb__MergeNode(leb_Memory *leb, const leb_Node node)
  * NodeCount -- Returns the number of triangles in the LEB
  *
  */
-LEBDEF uint32_t leb_NodeCount(const leb_Memory *leb)
+LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb)
 {
     return leb__GetData(leb, 1u, 0);
 }
@@ -713,7 +713,7 @@ LEBDEF uint32_t leb_NodeCount(const leb_Memory *leb)
  * This is procedure is for iterating over the nodes.
  *
  */
-LEBDEF leb_Node leb_DecodeNode(const leb_Memory *leb, uint32_t nodeID)
+LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t nodeID)
 {
     LEB_ASSERT(nodeID < leb_NodeCount(leb) && "nodeID > NodeCount(leb)");
 
@@ -737,7 +737,7 @@ LEBDEF leb_Node leb_DecodeNode(const leb_Memory *leb, uint32_t nodeID)
  * This does the inverse of the DecodeNode routine.
  *
  */
-LEBDEF uint32_t leb_EncodeNode(const leb_Memory *leb, const leb_Node node)
+LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node)
 {
     uint32_t nodeID = 0u;
     leb_Node nodeIterator = node;
@@ -838,7 +838,7 @@ static leb_Node leb__EdgeNode(const leb_Node node)
  * SplitNodeConforming -- Splits a node while producing a conforming LEB
  *
  */
-LEBDEF void leb_SplitNodeConforming(leb_Memory *leb, const leb_Node node)
+LEBDEF void leb_SplitNodeConforming(leb_Heap *leb, const leb_Node node)
 {
     if (!leb_IsLeafNode(leb, node)) {
         const uint32_t minNodeID = 1u << leb->minDepth;
@@ -865,7 +865,7 @@ LEBDEF void leb_SplitNodeConforming(leb_Memory *leb, const leb_Node node)
  * on the existance of the child of the node.
  *
  */
-static bool leb__HasNode(const leb_Memory *leb, const leb_Node node)
+static bool leb__HasNode(const leb_Heap *leb, const leb_Node node)
 {
     uint32_t nodeBit = leb__GetNodeBitValue(leb, node)
                      & leb__GetNodeBitValue(leb, leb__SiblingNode(node));
@@ -887,7 +887,7 @@ static bool leb__HasNode(const leb_Memory *leb, const leb_Node node)
  */
 LEBDEF void
 leb_MergeNodeConforming(
-    leb_Memory *leb,
+    leb_Heap *leb,
     const leb_Node node,
     const leb_DiamondParent diamond
 ) {
@@ -932,7 +932,7 @@ LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node)
  */
 static leb_NodeAndNeighbors
 leb__NodeAndNeighborsFromSameDepthNeighborIDs(
-    const leb_Memory *leb,
+    const leb_Heap *leb,
     const leb_SameDepthNeighborIDs nodeIDs,
     int nodeDepth
 ) {
@@ -962,7 +962,7 @@ leb__NodeAndNeighborsFromSameDepthNeighborIDs(
  */
 LEBDEF
 leb_NodeAndNeighbors leb_DecodeNodeAndNeighbors(
-    const leb_Memory *leb,
+    const leb_Heap *leb,
     uint32_t threadID
 ) {
 #define nodeID nodeIDs._reserved
@@ -1117,7 +1117,7 @@ leb_DecodeNodeAttributeArray(
  * BoundingNode -- Compute the triangle that bounds the point (x, y)
  *
  */
-LEBDEF leb_Node leb_BoundingNode(const leb_Memory *leb, float x, float y)
+LEBDEF leb_Node leb_BoundingNode(const leb_Heap *leb, float x, float y)
 {
     leb_Node node = {0u, 0};
 

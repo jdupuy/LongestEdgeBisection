@@ -8,14 +8,14 @@ by Jonathan Dupuy
 #endif
 layout(std430, binding = BUFFER_BINDING_LEB)
 buffer LebBuffer {
-    uint u_LebBuffer[];
+    uint u_LebHeap[];
 };
 
 #ifndef LEB_MAX_DEPTH
 #   error User must specify the maximum LoD for the subdivision
 #endif
 
-#define LEB_BUFFER u_LebBuffer
+#define LEB_HEAP u_LebHeap
 
 // data structures
 struct leb_Node {
@@ -84,8 +84,8 @@ void leb__SetBitValue(uint bufferIndex, uint bitID, uint bitValue)
 {
     const uint bitMask = ~(1u << bitID);
 
-    atomicAnd(LEB_BUFFER[bufferIndex], bitMask);
-    atomicOr(LEB_BUFFER[bufferIndex], bitValue << bitID);
+    atomicAnd(LEB_HEAP[bufferIndex], bitMask);
+    atomicOr(LEB_HEAP[bufferIndex], bitValue << bitID);
 }
 
 
@@ -98,8 +98,8 @@ void leb__BitFieldInsert(uint bufferIndex, uint bitData, uint bitOffset, uint bi
 {
     uint bitMask = ~(~(0xFFFFFFFFu << bitCount) << bitOffset);
 
-    atomicAnd(LEB_BUFFER[bufferIndex], bitMask);
-    atomicOr(LEB_BUFFER[bufferIndex], bitData << bitOffset);
+    atomicAnd(LEB_HEAP[bufferIndex], bitMask);
+    atomicOr(LEB_HEAP[bufferIndex], bitData << bitOffset);
 }
 
 
@@ -150,7 +150,7 @@ uint leb__GetNodeBitValue(in const leb_Node node)
     uint bufferID = bitID >> 5u;
     uint bitOffset = bitID & 31u;
 
-    return leb__GetBitValue(LEB_BUFFER[bufferID], bitOffset);
+    return leb__GetBitValue(LEB_HEAP[bufferID], bitOffset);
 }
 
 
@@ -260,8 +260,8 @@ uint leb__GetDataExplicit(uint nodeID, int nodeDepth, uint bitCount)
     uint bitFieldOffsetLSB = alignedBitOffset & 31u;
     uint bitCountLSB = min(32u - bitFieldOffsetLSB, bitCount);
     uint bitCountMSB = bitCount - bitCountLSB;
-    uint bitFieldLSB = LEB_BUFFER[lebBufferIndexLSB];
-    uint bitFieldMSB = LEB_BUFFER[lebBufferIndexMSB];
+    uint bitFieldLSB = LEB_HEAP[lebBufferIndexLSB];
+    uint bitFieldMSB = LEB_HEAP[lebBufferIndexMSB];
     uint lsb = leb__BitFieldExtract(bitFieldLSB, bitFieldOffsetLSB, bitCountLSB);
     uint msb = leb__BitFieldExtract(bitFieldMSB,                0u, bitCountMSB);
 
