@@ -193,12 +193,10 @@ uint leb__BufferUintSize(uint lebMaxDepth)
  */
 uint leb__DataBitID(uint dataID, int dataDepth)
 {
-    int tmp = 1 << dataDepth;
-    int bitCount = 1 + LEB_MAX_DEPTH - dataDepth;
-    int offset = tmp * (2 + bitCount);
-    int elementID = int(dataID) - tmp;
+    uint tmp1 = 2u << dataDepth;
+    uint tmp2 = uint(1 + LEB_MAX_DEPTH - dataDepth);
 
-    return uint(offset + elementID * bitCount);
+    return tmp1 + dataID * tmp2;
 }
 
 
