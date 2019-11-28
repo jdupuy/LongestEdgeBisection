@@ -1,4 +1,3 @@
-
 /* leb.h - public domain Longest Edge Bisection library
 by Jonathan Dupuy
 
@@ -66,16 +65,16 @@ LEBDEF void leb_MergeNodeConforming(leb_Heap *leb,
 LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb);
 LEBDEF bool leb_IsLeafNode(const leb_Heap *leb, const leb_Node node);
 LEBDEF bool leb_IsRootNode(const leb_Heap *leb, const leb_Node node);
-LEBDEF bool leb_IsNullNode(                       const leb_Node node);
+LEBDEF bool leb_IsNullNode(                     const leb_Node node);
 LEBDEF leb_Node leb_ParentNode(const leb_Node node);
 LEBDEF leb_SameDepthNeighborIDs
        leb_GetSameDepthNeighborIDs(const leb_NodeAndNeighbors nodes);
 
 // O(depth) queries
-LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t nodeID);
+LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t bitID);
 LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node);
 LEBDEF leb_NodeAndNeighbors
-       leb_DecodeNodeAndNeighbors(const leb_Heap *leb, uint32_t nodeID);
+       leb_DecodeNodeAndNeighbors(const leb_Heap *leb, uint32_t bitID);
 LEBDEF leb_SameDepthNeighborIDs
        leb_DecodeSameDepthNeighborIDs(const leb_Node node);
 LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node);
@@ -154,12 +153,12 @@ static uint32_t leb__GetBitValue(const uint32_t bitField, uint32_t bitID)
  * SetBitValue -- Sets the value of a bit stored in a 32-bit word
  *
  */
-static uint32_t
-leb__SetBitValue(const uint32_t bitField, uint32_t bitID, uint32_t bitValue)
+static void
+leb__SetBitValue(uint32_t *bitField, uint32_t bitID, uint32_t bitValue)
 {
     const uint32_t bitMask = ~(1u << bitID);
 
-    return (bitField & bitMask) | (bitValue << bitID);
+    (*bitField) = (*bitField & bitMask) | (bitValue << bitID);
 }
 
 
@@ -201,88 +200,85 @@ leb__BitFieldExtract(
 
 
 /*******************************************************************************
- * NodeToLeafBitID -- Computes the bit location associated to a node
+ * NodeToBitFieldID -- Computes the bit location associated to a node
  *
  */
 static uint32_t
-leb__NodeToLeafBitID(const leb_Heap *leb, const leb_Node node)
+leb__NodeToBitFieldID(const leb_Heap *leb, const leb_Node node)
 {
     return (node.id << (leb->maxDepth - node.depth)) + (2u << leb->maxDepth);
 }
 
 
 /*******************************************************************************
- * SetNodeBitValue -- Sets the bit associated to a leaf node to bitValue
+ * BitFieldWrite -- Sets the bit associated to a leaf node to bitValue
  *
  */
 static void
-leb__SetNodeBitValue(
+leb__BitFieldWrite(
     leb_Heap *leb,
     const leb_Node node,
     const uint32_t bitValue
 ) {
-    uint32_t bitID = leb__NodeToLeafBitID(leb, node);
-    uint32_t *buffer = &leb->buffer[bitID >> 5u];
+    uint32_t bitID = leb__NodeToBitFieldID(leb, node);
 
-    *buffer = leb__SetBitValue(*buffer, bitID & 31u, bitValue);
+    leb__SetBitValue(&leb->buffer[bitID >> 5u], bitID & 31u, bitValue);
 }
 
 
 /*******************************************************************************
- * GetNodeBitValue -- Returns the value of the bit associated to a leaf node
+ * BitFieldRead -- Returns the value of the bit associated to a leaf node
  *
  */
-static uint32_t leb__GetNodeBitValue(const leb_Heap *leb, const leb_Node node)
+static uint32_t leb__BitFieldRead(const leb_Heap *leb, const leb_Node node)
 {
-    uint32_t bitID = leb__NodeToLeafBitID(leb, node);
+    uint32_t bitID = leb__NodeToBitFieldID(leb, node);
 
     return leb__GetBitValue(leb->buffer[bitID >> 5u], bitID & 31u);
 }
 
 
 /*******************************************************************************
- * BitFieldSize -- Computes the number of bits to allocate for the buffer
+ * HeapBitSize -- Computes the number of bits to allocate for the buffer
  *
  * For a tree of max depth D, the number of bits is 2^(D+2).
  * Note that 2 bits are "wasted" in the sense that they only serve
  * to round the required number of bits to a power of two.
  *
  */
-static inline uint32_t leb__BitFieldSize(uint32_t lebMaxDepth)
+static inline uint32_t leb__HeapBitSize(uint32_t lebMaxDepth)
 {
     return 1u << (lebMaxDepth + 2u);
 }
 
 
 /*******************************************************************************
- * BufferUintSize -- Computes the number of uints to allocate for the bitfield
+ * HeapUint32Size -- Computes the number of uints to allocate for the bitfield
  *
  */
-static inline uint32_t leb__BufferUintSize(uint32_t lebMaxDepth)
+static inline uint32_t leb__HeapUint32Size(uint32_t lebMaxDepth)
 {
-    return leb__BitFieldSize(lebMaxDepth) >> 5u;
+    return leb__HeapBitSize(lebMaxDepth) >> 5u;
 }
 
 
 /*******************************************************************************
- * ComputeBitFieldByteSize -- Computes the number of Bytes to allocate for the bitfield
+ * HeapByteSize -- Computes the number of Bytes to allocate for the bitfield
  *
  */
-static uint32_t leb__BufferByteSize(uint32_t lebMaxDepth)
+static uint32_t leb__HeapByteSize(uint32_t lebMaxDepth)
 {
-    return leb__BufferUintSize(lebMaxDepth) * sizeof(uint32_t);
+    return leb__HeapUint32Size(lebMaxDepth) * sizeof(uint32_t);
 }
 
 
 /*******************************************************************************
- * DataBitID -- Returns the bit index that stores data associated with a given node
+ * NodeBitOffset -- Returns the bit index that stores data associated with a given node
  *
  * For a LEB of max depth D and given an index in [0, 2^(D+1) - 1], this
  * functions is used to emulate the behaviour of a lookup in an array, i.e.,
  * uint32_t[nodeID]. It provides the first bit in memory that stores
  * information associated with the element of index nodeID.
- * Note that we don't use the leb_Node structure here because it has a
- * different interpretation.
  *
  * For data located at level d, the bit offset is 2^d x (3 - d + D)
  * We then offset this quantity by the index by (nodeID - 2^d) x (D + 1 - d)
@@ -290,30 +286,28 @@ static uint32_t leb__BufferByteSize(uint32_t lebMaxDepth)
  *
  */
 static inline uint32_t
-leb__DataBitID(const leb_Heap *leb, uint32_t nodeID, int32_t nodeDepth)
+leb__NodeBitOffset(const leb_Heap *leb, uint32_t nodeID, int32_t nodeDepth)
 {
-    uint32_t tmp = 1u << nodeDepth;
-    int32_t bitCount = 1u + leb->maxDepth - nodeDepth;
-    uint32_t offset = tmp * (2u + bitCount);
-    int32_t elementID = nodeID - tmp;
+    uint32_t tmp1 = 2u << nodeDepth;
+    uint32_t tmp2 = (uint32_t)(1 + leb->maxDepth - nodeDepth);
 
-    return offset + (uint32_t)(elementID * bitCount);
+    return tmp1 + nodeID * tmp2;
 }
 
 
 /*******************************************************************************
- * DataBitSize -- Returns the number of bits associated with a given node
+ * NodeBitSize -- Returns the number of bits associated with a given node
  *
  */
 static inline int32_t
-leb__DataBitSize(const leb_Heap *leb, int32_t nodeDepth)
+leb__NodeBitSize(const leb_Heap *leb, int32_t nodeDepth)
 {
     return leb->maxDepth - nodeDepth + 1;
 }
 
 
 /*******************************************************************************
- * SetData -- Sets bitCount bits located at nodeID to bitData
+ * HeapWrite -- Sets bitCount bits located at nodeID to bitData
  *
  * Note that this procedure writes to at most two uint32 elements.
  * Two elements are relevant whenever the specified interval overflows 32-bit
@@ -321,15 +315,15 @@ leb__DataBitSize(const leb_Heap *leb, int32_t nodeDepth)
  *
  */
 static void
-leb__SetDataExplicit(
+leb__HeapWriteExplicit(
     leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     int32_t bitCount,
     uint32_t bitData
 ) {
-    uint32_t alignedBitOffset = leb__DataBitID(leb, nodeID, nodeDepth);
-    uint32_t maxBufferIndex = leb__BufferUintSize(leb->maxDepth) - 1u;
+    uint32_t alignedBitOffset = leb__NodeBitOffset(leb, nodeID, nodeDepth);
+    uint32_t maxBufferIndex = leb__HeapUint32Size(leb->maxDepth) - 1u;
     uint32_t lebBufferIndexLSB = (alignedBitOffset >> 5u);
     uint32_t lebBufferIndexMSB = leb__MinValue(lebBufferIndexLSB + 1, maxBufferIndex);
     uint32_t bitFieldOffsetLSB = alignedBitOffset & 31u;
@@ -349,20 +343,20 @@ leb__SetDataExplicit(
 }
 
 static void
-leb__SetData(
+leb__HeapWrite(
     leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     uint32_t bitData
 ) {
-    int bitCount = leb__DataBitSize(leb, nodeDepth);
+    int bitCount = leb__NodeBitSize(leb, nodeDepth);
 
-    leb__SetDataExplicit(leb, nodeID, nodeDepth, bitCount, bitData);
+    leb__HeapWriteExplicit(leb, nodeID, nodeDepth, bitCount, bitData);
 }
 
 
 /*******************************************************************************
- * GetData -- Returns bitCount bits located at nodeID
+ * HeapRead -- Returns bitCount bits located at nodeID
  *
  * Note that this procedure writes to at most two uint32 elements.
  * Two elements are relevant whenever the specified interval overflows 32-bit
@@ -370,14 +364,14 @@ leb__SetData(
  *
  */
 static uint32_t
-leb__GetDataExplicit(
+leb__HeapReadExplicit(
     const leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth,
     int32_t bitCount
 ) {
-    uint32_t alignedBitOffset = leb__DataBitID(leb, nodeID, nodeDepth);
-    uint32_t maxBufferIndex = leb__BufferUintSize(leb->maxDepth) - 1;
+    uint32_t alignedBitOffset = leb__NodeBitOffset(leb, nodeID, nodeDepth);
+    uint32_t maxBufferIndex = leb__HeapUint32Size(leb->maxDepth) - 1;
     uint32_t lebBufferIndexLSB = (alignedBitOffset >> 5u);
     uint32_t lebBufferIndexMSB = leb__MinValue(lebBufferIndexLSB + 1, maxBufferIndex);
     uint32_t bitFieldOffsetLSB = alignedBitOffset & 31u;
@@ -392,14 +386,14 @@ leb__GetDataExplicit(
 }
 
 static uint32_t
-leb__GetData(
+leb__HeapRead(
     const leb_Heap *leb,
     uint32_t nodeID,
     int32_t nodeDepth
 ) {
-    int bitCount = leb__DataBitSize(leb, nodeDepth);
+    int bitCount = leb__NodeBitSize(leb, nodeDepth);
 
-    return leb__GetDataExplicit(leb, nodeID, nodeDepth, bitCount);
+    return leb__HeapReadExplicit(leb, nodeID, nodeDepth, bitCount);
 }
 
 
@@ -409,7 +403,7 @@ leb__GetData(
  */
 static void leb__ClearBuffer(leb_Heap *leb)
 {
-    memset(leb->buffer, 0, leb__BufferByteSize(leb->maxDepth));
+    memset(leb->buffer, 0, leb__HeapByteSize(leb->maxDepth));
 }
 
 
@@ -427,7 +421,7 @@ LEBDEF leb_Heap *leb_CreateMinMax(int minDepth, int maxDepth)
 
     leb->minDepth = minDepth;
     leb->maxDepth = maxDepth;
-    leb->buffer = (uint32_t *)LEB_MALLOC(leb__BufferByteSize(maxDepth));
+    leb->buffer = (uint32_t *)LEB_MALLOC(leb__HeapByteSize(maxDepth));
     LEB_ASSERT(leb->buffer != NULL && "Memory allocation failed");
     leb_ResetToRoot(leb);
 
@@ -467,7 +461,7 @@ LEBDEF void leb_ResetToDepth(leb_Heap *leb, int depth)
     for (uint32_t nodeID = minNodeID; nodeID < maxNodeID; ++nodeID) {
         leb_Node node = {nodeID, depth};
 
-        leb__SetNodeBitValue(leb, node, 1u);
+        leb__BitFieldWrite(leb, node, 1u);
     }
 
     leb_ComputeSumReduction(leb);
@@ -506,7 +500,7 @@ LEBDEF void leb_ComputeSumReduction(leb_Heap *leb)
 
     // prepass: processes deepest levels in parallel
     for (uint32_t nodeID = minNodeID; nodeID < maxNodeID; nodeID+= 32u) {
-        uint32_t alignedBitOffset = leb__DataBitID(leb, nodeID, depth);
+        uint32_t alignedBitOffset = leb__NodeBitOffset(leb, nodeID, depth);
         uint32_t bitField = leb->buffer[alignedBitOffset >> 5u];
         uint32_t bitData = 0u;
 
@@ -525,7 +519,7 @@ LEBDEF void leb_ComputeSumReduction(leb_Heap *leb)
                 | ((bitField >> 5u) & (7u << 15u))
                 | ((bitField >> 6u) & (7u << 18u))
                 | ((bitField >> 7u) & (7u << 21u));
-        leb__SetDataExplicit(leb, nodeID >> 2u, depth - 2, 24u, bitData);
+        leb__HeapWriteExplicit(leb, nodeID >> 2u, depth - 2, 24u, bitData);
 
         // 4-bits
         bitField = (bitField & 0x0F0F0F0Fu) + ((bitField >>  4u) & 0x0F0F0F0Fu);
@@ -533,18 +527,18 @@ LEBDEF void leb_ComputeSumReduction(leb_Heap *leb)
                 | ((bitField >>  4u) & (15u <<  4u))
                 | ((bitField >>  8u) & (15u <<  8u))
                 | ((bitField >> 12u) & (15u << 12u));
-        leb__SetDataExplicit(leb, nodeID >> 3u, depth - 3, 16u, bitData);
+        leb__HeapWriteExplicit(leb, nodeID >> 3u, depth - 3, 16u, bitData);
 
         // 5-bits
         bitField = (bitField & 0x00FF00FFu) + ((bitField >>  8u) & 0x00FF00FFu);
         bitData = ((bitField >>  0u) & (31u << 0u))
                 | ((bitField >> 11u) & (31u << 5u));
-        leb__SetDataExplicit(leb, nodeID >> 4u, depth - 4, 10u, bitData);
+        leb__HeapWriteExplicit(leb, nodeID >> 4u, depth - 4, 10u, bitData);
 
         // 6-bits
         bitField = (bitField & 0x0000FFFFu) + ((bitField >> 16u) & 0x0000FFFFu);
         bitData = bitField;
-        leb__SetDataExplicit(leb, nodeID >> 5u, depth - 5,  6u, bitData);
+        leb__HeapWriteExplicit(leb, nodeID >> 5u, depth - 5,  6u, bitData);
     }
     depth-= 5;
 
@@ -554,10 +548,10 @@ LEBDEF void leb_ComputeSumReduction(leb_Heap *leb)
         uint32_t maxNodeID = 2u << depth;
 
         for (uint32_t j = minNodeID; j < maxNodeID; ++j) {
-            uint32_t x0 = leb__GetData(leb, j << 1u     , depth + 1);
-            uint32_t x1 = leb__GetData(leb, j << 1u | 1u, depth + 1);
+            uint32_t x0 = leb__HeapRead(leb, j << 1u     , depth + 1);
+            uint32_t x1 = leb__HeapRead(leb, j << 1u | 1u, depth + 1);
 
-            leb__SetData(leb, j, depth, x0 + x1);
+            leb__HeapWrite(leb, j, depth, x0 + x1);
         }
     }
 }
@@ -683,7 +677,7 @@ static leb_Node leb__LeftChildNode(const leb_Node node)
  */
 static void leb__SplitNode(leb_Heap *leb, const leb_Node node)
 {
-    leb__SetNodeBitValue(leb, leb__RightChildNode(node), 1u);
+    leb__BitFieldWrite(leb, leb__RightChildNode(node), 1u);
 }
 
 
@@ -693,7 +687,7 @@ static void leb__SplitNode(leb_Heap *leb, const leb_Node node)
  */
 static void leb__MergeNode(leb_Heap *leb, const leb_Node node)
 {
-    leb__SetNodeBitValue(leb, leb__RightSiblingNode(node), 0u);
+    leb__BitFieldWrite(leb, leb__RightSiblingNode(node), 0u);
 }
 
 
@@ -703,7 +697,7 @@ static void leb__MergeNode(leb_Heap *leb, const leb_Node node)
  */
 LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb)
 {
-    return leb__GetData(leb, 1u, 0);
+    return leb__HeapRead(leb, 1u, 0);
 }
 
 
@@ -719,8 +713,8 @@ LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t nodeID)
 
     leb_Node node = {1u, 0};
 
-    while (leb__GetData(leb, node.id, node.depth) > 1u) {
-        uint32_t cmp = leb__GetData(leb, node.id<<= 1u, ++node.depth);
+    while (leb__HeapRead(leb, node.id, node.depth) > 1u) {
+        uint32_t cmp = leb__HeapRead(leb, node.id<<= 1u, ++node.depth);
         uint32_t b = nodeID < cmp ? 0 : 1;
 
         node.id|= b;
@@ -744,7 +738,7 @@ LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node)
 
     while (nodeIterator.id > 1u) {
         leb_Node sibling = leb__LeftSiblingNode(nodeIterator);
-        uint32_t nodeCount = leb__GetData(leb, sibling.id, sibling.depth);
+        uint32_t nodeCount = leb__HeapRead(leb, sibling.id, sibling.depth);
 
         nodeID+= (nodeIterator.id & 1u) * nodeCount;
         nodeIterator = leb_ParentNode(nodeIterator);
@@ -867,11 +861,11 @@ LEBDEF void leb_SplitNodeConforming(leb_Heap *leb, const leb_Node node)
  */
 static bool leb__HasNode(const leb_Heap *leb, const leb_Node node)
 {
-    uint32_t nodeBit = leb__GetNodeBitValue(leb, node)
-                     & leb__GetNodeBitValue(leb, leb__SiblingNode(node));
+    uint32_t nodeBit = leb__BitFieldRead(leb, node)
+                     & leb__BitFieldRead(leb, leb__SiblingNode(node));
 
     if (!leb_IsLeafNode(leb, node)) {
-        nodeBit&= 1u ^ leb__GetNodeBitValue(leb, leb__RightChildNode(node));
+        nodeBit&= 1u ^ leb__BitFieldRead(leb, leb__RightChildNode(node));
     }
 
     return (nodeBit == 1u);
@@ -969,8 +963,8 @@ leb_NodeAndNeighbors leb_DecodeNodeAndNeighbors(
     leb_SameDepthNeighborIDs nodeIDs = {0u, 0u, 0u, 1u};
     int32_t nodeDepth = 0;
 
-    while (leb__GetData(leb, nodeID, nodeDepth) > 1u) {
-        uint32_t cmp = leb__GetData(leb, nodeID << 1u, ++nodeDepth);
+    while (leb__HeapRead(leb, nodeID, nodeDepth) > 1u) {
+        uint32_t cmp = leb__HeapRead(leb, nodeID << 1u, ++nodeDepth);
         uint32_t b = threadID < cmp ? 0u : 1u;
 
         nodeIDs = leb__SplitNodeIDs(nodeIDs, b);
