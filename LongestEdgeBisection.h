@@ -382,8 +382,7 @@ static uint32_t leb__HeapByteSize(uint32_t lebMaxDepth)
  * Note that the null index (nodeID = 0) is also supported.
  *
  */
-static inline uint32_t
-leb__NodeBitID(const leb_Heap *leb, const leb_Node node)
+static inline uint32_t leb__NodeBitID(const leb_Heap *leb, const leb_Node node)
 {
     uint32_t tmp1 = 2u << node.depth;
     uint32_t tmp2 = 1u + (uint32_t)(leb->maxDepth - node.depth);
@@ -432,11 +431,8 @@ typedef struct {
 } leb__HeapArgs;
 
 leb__HeapArgs
-leb__CreateHeapArgs(
-    const leb_Heap *leb,
-    const leb_Node node,
-    int32_t bitCount
-) {
+leb__CreateHeapArgs(const leb_Heap *leb, const leb_Node node, int32_t bitCount)
+{
     uint32_t alignedBitOffset = leb__NodeBitID(leb, node);
     uint32_t maxBufferIndex = leb__HeapUint32Size(leb->maxDepth) - 1u;
     uint32_t lebBufferIndexLSB = (alignedBitOffset >> 5u);
@@ -480,8 +476,7 @@ leb__HeapWriteExplicit(
                         bitData >> args.bitCountLSB);
 }
 
-static void
-leb__HeapWrite(leb_Heap *leb, const leb_Node node, uint32_t bitData)
+static void leb__HeapWrite(leb_Heap *leb, const leb_Node node, uint32_t bitData)
 {
     leb__HeapWriteExplicit(leb, node, leb__NodeBitSize(leb, node), bitData);
 }
@@ -982,11 +977,9 @@ leb__NodeAndNeighborsFromSameDepthNeighborIDs(
  * DecodeNodeAndNeighbors -- Decode the LEB Node associated to an index, along with its neighbors
  *
  */
-LEBDEF
-leb_NodeAndNeighbors leb_DecodeNodeAndNeighbors(
-    const leb_Heap *leb,
-    uint32_t threadID
-) {
+LEBDEF leb_NodeAndNeighbors
+leb_DecodeNodeAndNeighbors(const leb_Heap *leb, uint32_t threadID)
+{
 #define nodeID nodeIDs._reserved
     leb_SameDepthNeighborIDs nodeIDs = {0u, 0u, 0u, 1u};
     int32_t nodeDepth = 0;
