@@ -234,14 +234,14 @@ LEBDEF bool leb_IsNullNode(const leb_Node n)
  * ParentNode -- Computes the parent of the input node
  *
  */
-static leb_Node leb_ParentNode_Fast(const leb_Node node)
+static leb_Node leb__ParentNode_Fast(const leb_Node node)
 {
     return {node.id >> 1u, node.depth - 1};
 }
 
 LEBDEF leb_Node leb_ParentNode(const leb_Node node)
 {
-     return leb_IsNullNode(node) ? node : leb_ParentNode_Fast(node);
+     return leb_IsNullNode(node) ? node : leb__ParentNode_Fast(node);
 }
 
 
@@ -409,8 +409,7 @@ leb__NodeBitID_BitField(const leb_Heap *leb, const leb_Node node)
  * NodeBitSize -- Returns the number of bits storing the input node value
  *
  */
-static inline int32_t
-leb__NodeBitSize(const leb_Heap *leb, const leb_Node node)
+static inline int32_t leb__NodeBitSize(const leb_Heap *leb, const leb_Node node)
 {
     return leb->maxDepth - node.depth + 1;
 }
@@ -763,7 +762,7 @@ LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t nodeID)
 
     leb_Node node = {1u, 0};
 
-    while (leb__HeapRead(leb, {node.id, node.depth}) > 1u) {
+    while (leb__HeapRead(leb, node) > 1u) {
         uint32_t cmp = leb__HeapRead(leb, {node.id<<= 1u, ++node.depth});
         uint32_t b = nodeID < cmp ? 0 : 1;
 
@@ -791,7 +790,7 @@ LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node)
         uint32_t nodeCount = leb__HeapRead(leb, {sibling.id, sibling.depth});
 
         nodeID+= (nodeIterator.id & 1u) * nodeCount;
-        nodeIterator = leb_ParentNode(nodeIterator);
+        nodeIterator = leb__ParentNode_Fast(nodeIterator);
     }
 
     return nodeID;
