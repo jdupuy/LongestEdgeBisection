@@ -3,11 +3,13 @@ by Jonathan Dupuy
 
 */
 
-#ifndef BUFFER_BINDING_LEB
-#   error User must specify the binding of the LEB buffer
-#endif
 #ifndef LEB_BUFFER_COUNT
-#   error User must specify the total number of LEB buffers
+#   define BUFFER_BINDING_LEB  0
+#   define LEB_BUFFER_COUNT    1
+#else
+#   ifndef BUFFER_BINDING_LEB
+#       error User must specify the binding of the LEB buffer
+#   endif
 #endif
 layout(std430, binding = BUFFER_BINDING_LEB)
 buffer LebBuffer {
@@ -61,6 +63,9 @@ leb_SameDepthNeighborIDs leb_DecodeSameDepthNeighborIDs_Quad(in const leb_Node n
 leb_DiamondParent        leb_DecodeDiamondParent     (in const leb_Node node);
 leb_DiamondParent        leb_DecodeDiamondParent_Quad(in const leb_Node node);
 
+// intersection test O(depth)
+leb_Node leb_BoundingNode(const int lebID, vec2 p);
+
 // subdivision routine O(depth)
 vec3   leb_DecodeNodeAttributeArray     (in const leb_Node node, in const vec3 data);
 mat2x3 leb_DecodeNodeAttributeArray     (in const leb_Node node, in const mat2x3 data);
@@ -71,8 +76,6 @@ mat2x3 leb_DecodeNodeAttributeArray_Quad(in const leb_Node node, in const mat2x3
 mat3x3 leb_DecodeNodeAttributeArray_Quad(in const leb_Node node, in const mat3x3 data);
 mat4x3 leb_DecodeNodeAttributeArray_Quad(in const leb_Node node, in const mat4x3 data);
 
-// intersection test O(depth)
-leb_Node leb_BoundingNode(const int lebID, vec2 p);
 
 // -----------------------------------------------------------------------------
 // -----------------------------------------------------------------------------
