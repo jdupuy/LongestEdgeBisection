@@ -60,6 +60,10 @@ LEBDEF void leb_SplitNodeConforming(leb_Heap *leb, const leb_Node node);
 LEBDEF void leb_MergeNodeConforming(leb_Heap *leb,
                                     const leb_Node node,
                                     const leb_DiamondParent diamond);
+LEBDEF void leb_SplitNodeConforming_Quad(leb_Heap *leb, const leb_Node node);
+LEBDEF void leb_MergeNodeConforming_Quad(leb_Heap *leb,
+                                         const leb_Node node,
+                                         const leb_DiamondParent diamond);
 
 // O(1) queries
 LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb);
@@ -74,16 +78,23 @@ LEBDEF leb_SameDepthNeighborIDs
 // O(depth) queries
 LEBDEF leb_Node leb_DecodeNode(const leb_Heap *leb, uint32_t bitID);
 LEBDEF uint32_t leb_EncodeNode(const leb_Heap *leb, const leb_Node node);
-LEBDEF leb_NodeAndNeighbors
-       leb_DecodeNodeAndNeighbors(const leb_Heap *leb, uint32_t bitID);
-LEBDEF leb_SameDepthNeighborIDs
-       leb_DecodeSameDepthNeighborIDs(const leb_Node node);
+LEBDEF leb_NodeAndNeighbors leb_DecodeNodeAndNeighbors(const leb_Heap *leb,
+                                                       uint32_t bitID);
+LEBDEF leb_NodeAndNeighbors leb_DecodeNodeAndNeighbors_Quad(const leb_Heap *leb,
+                                                            uint32_t bitID);
+LEBDEF leb_SameDepthNeighborIDs leb_DecodeSameDepthNeighborIDs(const leb_Node node);
+LEBDEF leb_SameDepthNeighborIDs leb_DecodeSameDepthNeighborIDs_Quad(const leb_Node node);
 LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node);
+LEBDEF leb_DiamondParent leb_DecodeDiamondParent_Quad(const leb_Node node);
 
 // subdivision routine O(depth)
 LEBDEF void leb_DecodeNodeAttributeArray(const leb_Node node,
                                          int attributeArraySize,
                                          float attributeArray[][3]);
+LEBDEF void leb_DecodeNodeAttributeArray_Quad(const leb_Node node,
+                                              int attributeArraySize,
+                                              float attributeArray[][3]);
+
 // intersection test O(depth)
 LEBDEF leb_Node leb_BoundingNode(const leb_Heap *leb, float x, float y);
 
@@ -846,6 +857,22 @@ leb_DecodeSameDepthNeighborIDs(const leb_Node node)
     return nodeIDs;
 }
 
+LEBDEF leb_SameDepthNeighborIDs
+leb_DecodeSameDepthNeighborIDs_Quad(const leb_Node node)
+{
+    if (node.depth == 0)
+        return {0u, 0u, 0u, 1u};
+
+    uint32_t b = leb__GetBitValue(node.id, node.depth - 1);
+    leb_SameDepthNeighborIDs nodeIDs = {0u, 0u, 3u - b, 2u + b};
+
+    for (int bitID = node.depth - 2; bitID >= 0; --bitID) {
+        nodeIDs = leb__SplitNodeIDs(nodeIDs, leb__GetBitValue(node.id, bitID));
+    }
+
+    return nodeIDs;
+}
+
 
 /*******************************************************************************
  * SameDepthNeighborIDs -- Computes the IDs of the same-level neighbors of a node
@@ -873,6 +900,13 @@ static leb_Node leb__EdgeNode(const leb_Node node)
     return {nodeID, (nodeID == 0u) ? 0 : node.depth};
 }
 
+static leb_Node leb__EdgeNode_Quad(const leb_Node node)
+{
+    uint32_t nodeID = leb_DecodeSameDepthNeighborIDs_Quad(node).edge;
+
+    return {nodeID, (nodeID == 0u) ? 0 : node.depth};
+}
+
 
 /*******************************************************************************
  * SplitNodeConforming -- Splits a node while producing a conforming LEB
@@ -892,6 +926,24 @@ LEBDEF void leb_SplitNodeConforming(leb_Heap *leb, const leb_Node node)
             nodeIterator = leb_ParentNode(nodeIterator);
             leb__SplitNode(leb, nodeIterator);
             nodeIterator = leb__EdgeNode(nodeIterator);
+        }
+    }
+}
+
+LEBDEF void leb_SplitNodeConforming_Quad(leb_Heap *leb, const leb_Node node)
+{
+    if (!leb_IsCeilNode(leb, node)) {
+        const uint32_t minNodeID = 1u << leb->minDepth;
+        leb_Node nodeIterator = node;
+
+        leb__SplitNode(leb, nodeIterator);
+        nodeIterator = leb__EdgeNode_Quad(nodeIterator);
+
+        while (nodeIterator.id >= minNodeID) {
+            leb__SplitNode(leb, nodeIterator);
+            nodeIterator = leb_ParentNode(nodeIterator);
+            leb__SplitNode(leb, nodeIterator);
+            nodeIterator = leb__EdgeNode_Quad(nodeIterator);
         }
     }
 }
@@ -923,6 +975,15 @@ leb_MergeNodeConforming(
     }
 }
 
+LEBDEF void
+leb_MergeNodeConforming_Quad(
+    leb_Heap *leb,
+    const leb_Node node,
+    const leb_DiamondParent diamond
+) {
+    leb_MergeNodeConforming(leb, node, diamond);
+}
+
 
 /*******************************************************************************
  * DecodeDiamondParent -- Decodes the upper Diamond associated to the leb_Node
@@ -934,6 +995,18 @@ LEBDEF leb_DiamondParent leb_DecodeDiamondParent(const leb_Node node)
 {
     leb_Node parentNode = leb_ParentNode(node);
     uint32_t diamondNodeID = leb_DecodeSameDepthNeighborIDs(parentNode).edge;
+    leb_Node diamondNode = {
+        diamondNodeID > 0u ? diamondNodeID : parentNode.id,
+        parentNode.depth
+    };
+
+    return {parentNode, diamondNode};
+}
+
+LEBDEF leb_DiamondParent leb_DecodeDiamondParent_Quad(const leb_Node node)
+{
+    leb_Node parentNode = leb_ParentNode(node);
+    uint32_t diamondNodeID = leb_DecodeSameDepthNeighborIDs_Quad(parentNode).edge;
     leb_Node diamondNode = {
         diamondNodeID > 0u ? diamondNodeID : parentNode.id,
         parentNode.depth
@@ -1085,6 +1158,25 @@ leb__SplittingMatrix(lebMatrix3x3 splittingMatrix, uint32_t splitBit)
 
 
 /*******************************************************************************
+ * QuadMatrix3x3 -- Computes a mirroring matrix from a split bit
+ *
+ */
+static void
+leb__QuadMatrix(lebMatrix3x3 matrix, uint32_t splitBit)
+{
+    float b = float(splitBit);
+    float c = 1.0f - b;
+    lebMatrix3x3 quadMatrix = {
+        {c, 0.0f,    b},
+        {b,    c,    b},
+        {b, 0.0f,    c}
+    };
+
+    memcpy(matrix, quadMatrix, sizeof(quadMatrix));
+}
+
+
+/*******************************************************************************
  * DecodeTransformationMatrix -- Computes the matrix associated to a LEB
  * node
  *
@@ -1097,6 +1189,18 @@ leb__DecodeTransformationMatrix(
     leb__IdentityMatrix3x3(splittingMatrix);
 
     for (int bitID = node.depth - 1; bitID >= 0; --bitID) {
+        leb__SplittingMatrix(splittingMatrix, leb__GetBitValue(node.id, bitID));
+    }
+}
+
+static void
+leb__DecodeTransformationMatrix_Quad(
+    const leb_Node node,
+    lebMatrix3x3 splittingMatrix
+) {
+    leb__QuadMatrix(splittingMatrix, leb__GetBitValue(node.id, node.depth - 1));
+
+    for (int bitID = node.depth - 2; bitID >= 0; --bitID) {
         leb__SplittingMatrix(splittingMatrix, leb__GetBitValue(node.id, bitID));
     }
 }
@@ -1118,6 +1222,27 @@ leb_DecodeNodeAttributeArray(
     float attributeVector[3];
 
     leb__DecodeTransformationMatrix(node, m);
+
+    for (int i = 0; i < attributeArraySize; ++i) {
+        memcpy(attributeVector, attributeArray[i], sizeof(attributeVector));
+        attributeArray[i][0] = leb__DotProduct(3, m[0], attributeVector);
+        attributeArray[i][1] = leb__DotProduct(3, m[1], attributeVector);
+        attributeArray[i][2] = leb__DotProduct(3, m[2], attributeVector);
+    }
+}
+
+LEBDEF void
+leb_DecodeNodeAttributeArray_Quad(
+    const leb_Node node,
+    int attributeArraySize,
+    float attributeArray[][3]
+) {
+    LEB_ASSERT(attributeArraySize > 0);
+
+    lebMatrix3x3 m;
+    float attributeVector[3];
+
+    leb__DecodeTransformationMatrix_Quad(node, m);
 
     for (int i = 0; i < attributeArraySize; ++i) {
         memcpy(attributeVector, attributeArray[i], sizeof(attributeVector));
