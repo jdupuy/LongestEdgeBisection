@@ -64,7 +64,8 @@ leb_DiamondParent        leb_DecodeDiamondParent     (in const leb_Node node);
 leb_DiamondParent        leb_DecodeDiamondParent_Quad(in const leb_Node node);
 
 // intersection test O(depth)
-leb_Node leb_BoundingNode(const int lebID, vec2 p);
+leb_Node leb_BoundingNode     (const int lebID, vec2 p);
+leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p);
 
 // subdivision routine O(depth)
 vec3   leb_DecodeNodeAttributeArray     (in const leb_Node node, in const vec3 data);
@@ -978,6 +979,37 @@ leb_Node leb_BoundingNode(const int lebID, vec2 p)
 
     if (p.x >= 0.0f && p.y >= 0.0f && p.x + p.y <= 1.0f) {
         node = leb_Node(1u, 0);
+
+        while (!leb_IsLeafNode(lebID, node) && !leb_IsCeilNode(lebID, node)) {
+            vec2 q = p;
+
+            if (q.x < q.y) {
+                node = leb__LeftChildNode(node);
+                p.x = (1.0f - q.x - q.y);
+                p.y = (q.y - q.x);
+            } else {
+                node = leb__RightChildNode(node);
+                p.x = (q.x - q.y);
+                p.y = (1.0f - q.x - q.y);
+            }
+        }
+    }
+
+    return node;
+}
+
+leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p)
+{
+    leb_Node node = leb_Node(0u, 0);
+
+    if (p.x >= 0.0f && p.y >= 0.0f && p.x <= 1.0f && p.y <= 1.0f) {
+        if (p.x + p.y <= 1.0f) {
+            node = leb_Node(2u, 1);
+        } else {
+            node = leb_Node(3u, 1);
+            p.x = 1.0f - p.x;
+            p.y = 1.0f - p.y;
+        }
 
         while (!leb_IsLeafNode(lebID, node) && !leb_IsCeilNode(lebID, node)) {
             vec2 q = p;
