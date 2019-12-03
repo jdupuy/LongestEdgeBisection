@@ -96,7 +96,8 @@ LEBDEF void leb_DecodeNodeAttributeArray_Quad(const leb_Node node,
                                               float attributeArray[][3]);
 
 // intersection test O(depth)
-LEBDEF leb_Node leb_BoundingNode(const leb_Heap *leb, float x, float y);
+LEBDEF leb_Node leb_BoundingNode     (const leb_Heap *leb, float x, float y);
+LEBDEF leb_Node leb_BoundingNode_Quad(const leb_Heap *leb, float x, float y);
 
 
 #ifdef __cplusplus
@@ -1263,6 +1264,37 @@ LEBDEF leb_Node leb_BoundingNode(const leb_Heap *leb, float x, float y)
 
     if (x >= 0.0f && y >= 0.0f && x + y <= 1.0f) {
         node = {1u, 0};
+
+        while (!leb_IsLeafNode(leb, node) && !leb_IsCeilNode(leb, node)) {
+            float s = x, t = y;
+
+            if (s < t) {
+                node = leb__LeftChildNode(node);
+                x = (1.0f - s - t);
+                y = (t - s);
+            } else {
+                node = leb__RightChildNode(node);
+                x = (s - t);
+                y = (1.0f - s - t);
+            }
+        }
+    }
+
+    return node;
+}
+
+LEBDEF leb_Node leb_BoundingNode_Quad(const leb_Heap *leb, float x, float y)
+{
+    leb_Node node = {0u, 0};
+
+    if (x >= 0.0f && y >= 0.0f && x <= 1.0f && y <= 1.0f) {
+        if (x + y <= 1.0f) {
+            node = {2u, 1};
+        } else {
+            node = {3u, 1};
+            x = 1 - x;
+            y = 1 - y;
+        }
 
         while (!leb_IsLeafNode(leb, node) && !leb_IsCeilNode(leb, node)) {
             float s = x, t = y;
