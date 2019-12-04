@@ -64,8 +64,14 @@ leb_DiamondParent        leb_DecodeDiamondParent     (in const leb_Node node);
 leb_DiamondParent        leb_DecodeDiamondParent_Quad(in const leb_Node node);
 
 // intersection test O(depth)
-leb_Node leb_BoundingNode     (const int lebID, vec2 p);
-leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p);
+leb_Node leb_BoundingNode     (const int lebID, vec2 p, out vec2 u);
+leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p, out vec2 u);
+leb_NodeAndNeighbors leb_BoundingNodeAndNeighbors     (const int lebID,
+                                                       vec2 p,
+                                                       out vec2 u);
+leb_NodeAndNeighbors leb_BoundingNodeAndNeighbors_Quad(const int lebID,
+                                                       vec2 p,
+                                                       out vec2 u);
 
 // subdivision routine O(depth)
 vec3   leb_DecodeNodeAttributeArray     (in const leb_Node node, in const vec3 data);
@@ -840,26 +846,25 @@ leb__NodeAndNeighborsFromSameDepthNeighborIDs(
  * DecodeNodeAndNeighbors -- Decode the LEB Node associated to an index, along with its neighbors
  *
  */
-#if 0 // TODO
 leb_NodeAndNeighbors
 leb_DecodeNodeAndNeighbors(const int lebID, uint threadID)
 {
 #define nodeID nodeIDs._reserved
     leb_SameDepthNeighborIDs nodeIDs = leb_SameDepthNeighborIDs(0u, 0u, 0u, 1u);
-    int32_t nodeDepth = 0;
+    int nodeDepth = 0;
 
-    while (leb__HeapRead(leb, {nodeID, nodeDepth}) > 1u) {
-        uint32_t cmp = leb__HeapRead(leb, {nodeID << 1u, ++nodeDepth});
-        uint32_t b = threadID < cmp ? 0u : 1u;
+    while (leb__HeapRead(lebID, leb_Node(nodeID, nodeDepth)) > 1u) {
+        leb_Node leftChildNode = leb__LeftChildNode(leb_Node(nodeID, nodeDepth));
+        uint cmp = leb__HeapRead(lebID, leftChildNode);
+        uint b = threadID < cmp ? 0u : 1u;
 
         nodeIDs = leb__SplitNodeIDs(nodeIDs, b);
         threadID-= cmp * b;
     }
 
-    return leb__NodeAndNeighborsFromSameDepthNeighborIDs(leb, nodeIDs, nodeDepth);
+    return leb__NodeAndNeighborsFromSameDepthNeighborIDs(lebID, nodeIDs, nodeDepth);
 #undef nodeID
 }
-#endif
 
 
 /*******************************************************************************
@@ -973,7 +978,7 @@ mat4x3 leb_DecodeNodeAttributeArray_Quad(in const leb_Node node, in const mat4x3
  * BoundingNode -- Compute the triangle that bounds the point (x, y)
  *
  */
-leb_Node leb_BoundingNode(const int lebID, vec2 p)
+leb_Node leb_BoundingNode(const int lebID, vec2 p, out vec2 u)
 {
     leb_Node node = leb_Node(0u, 0);
 
@@ -993,12 +998,14 @@ leb_Node leb_BoundingNode(const int lebID, vec2 p)
                 p.y = (1.0f - q.x - q.y);
             }
         }
+
+        u = p;
     }
 
     return node;
 }
 
-leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p)
+leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p, out vec2 u)
 {
     leb_Node node = leb_Node(0u, 0);
 
@@ -1024,8 +1031,84 @@ leb_Node leb_BoundingNode_Quad(const int lebID, vec2 p)
                 p.y = (1.0f - q.x - q.y);
             }
         }
+
+        u = p;
     }
 
     return node;
+}
+
+
+/*******************************************************************************
+ * BoundingNodeAndNeighbors -- Compute the triangle that bounds the point (x, y)
+ *
+ */
+#if 0
+leb_NodeAndNeighbors
+leb_BoundingNodeAndNeighbors(const int lebID, vec2 p, out vec2 u)
+{
+    leb_Node node = leb_Node(0u, 0);
+
+    if (p.x >= 0.0f && p.y >= 0.0f && p.x + p.y <= 1.0f) {
+        node = leb_Node(1u, 0);
+
+        while (!leb_IsLeafNode(lebID, node) && !leb_IsCeilNode(lebID, node)) {
+            vec2 q = p;
+
+            if (q.x < q.y) {
+                node = leb__LeftChildNode(node);
+                p.x = (1.0f - q.x - q.y);
+                p.y = (q.y - q.x);
+            } else {
+                node = leb__RightChildNode(node);
+                p.x = (q.x - q.y);
+                p.y = (1.0f - q.x - q.y);
+            }
+        }
+
+        u = p;
+    }
+
+    return node;
+}
+#endif
+
+leb_NodeAndNeighbors
+leb_BoundingNodeAndNeighbors_Quad(const int lebID, vec2 p, out vec2 u)
+{
+    leb_SameDepthNeighborIDs nodeIDs = leb_SameDepthNeighborIDs(0u, 0u, 0u, 1u);
+    int nodeDepth = 0;
+
+    if (p.x >= 0.0f && p.y >= 0.0f && p.x <= 1.0f && p.y <= 1.0f) {
+        if (p.x + p.y <= 1.0f) {
+            nodeIDs = leb_SameDepthNeighborIDs(0u, 0u, 3u, 2u);
+        } else {
+            nodeIDs = leb_SameDepthNeighborIDs(0u, 0u, 2u, 3u);
+            p.x = 1.0f - p.x;
+            p.y = 1.0f - p.y;
+        }
+
+        nodeDepth = 1;
+        while (!leb_IsLeafNode(lebID, leb_Node(nodeIDs._reserved, nodeDepth)) &&
+               !leb_IsCeilNode(lebID, leb_Node(nodeIDs._reserved, nodeDepth))) {
+            vec2 q = p;
+
+            if (q.x < q.y) {
+                nodeIDs = leb__SplitNodeIDs(nodeIDs, 0u);
+                p.x = (1.0f - q.x - q.y);
+                p.y = (q.y - q.x);
+            } else {
+                nodeIDs = leb__SplitNodeIDs(nodeIDs, 1u);
+                p.x = (q.x - q.y);
+                p.y = (1.0f - q.x - q.y);
+            }
+
+            ++nodeDepth;
+        }
+
+        u = p;
+    }
+
+    return leb__NodeAndNeighborsFromSameDepthNeighborIDs(lebID, nodeIDs, nodeDepth);
 }
 
