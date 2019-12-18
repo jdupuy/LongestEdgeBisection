@@ -49,6 +49,11 @@ LEBDEF leb_Heap *leb_Create(int maxDepth);
 LEBDEF leb_Heap *leb_CreateMinMax(int minDepth, int maxDepth);
 LEBDEF void leb_Release(leb_Heap *leb);
 
+// serialization
+LEBDEF const char  *leb_GetHeapMemory(const leb_Heap *leb);
+LEBDEF void         leb_SetHeapMemory(leb_Heap *leb, const char *buffer);
+LEBDEF uint32_t     leb_HeapByteSize(const leb_Heap *leb);
+
 // loaders
 LEBDEF void leb_ResetToRoot(leb_Heap *leb);
 LEBDEF void leb_ResetToLeaf(leb_Heap *leb);
@@ -578,6 +583,36 @@ static void leb__ClearBuffer(leb_Heap *leb)
 
 
 /*******************************************************************************
+ * GetHeapMemory -- Returns a read-only pointer to the heap memory
+ *
+ */
+LEBDEF const char *leb_GetHeapMemory(const leb_Heap *leb)
+{
+    return (char *)leb->buffer;
+}
+
+
+/*******************************************************************************
+ * SetHeapMemory -- Sets the heap memory from a read-only buffer
+ *
+ */
+LEBDEF void leb_SetHeapMemory(leb_Heap *leb, const char *buffer)
+{
+    memcpy(leb->buffer, buffer, leb_HeapByteSize(leb));
+}
+
+
+/*******************************************************************************
+ * HeapByteSize -- Returns the amount of bytes consumed by the LEB heap
+ *
+ */
+LEBDEF uint32_t leb_HeapByteSize(const leb_Heap *leb)
+{
+    return leb__HeapByteSize(leb->maxDepth);
+}
+
+
+/*******************************************************************************
  * Buffer Ctor
  *
  */
@@ -879,7 +914,7 @@ leb_DecodeSameDepthNeighborIDs_Quad(const leb_Node node)
  * SameDepthNeighborIDs -- Computes the IDs of the same-level neighbors of a node
  *
  */
-LEBDEF leb_SameDepthNeighborIDs 
+LEBDEF leb_SameDepthNeighborIDs
 leb_GetSameDepthNeighborIDs(const leb_NodeAndNeighbors nodes)
 {
     uint32_t edgeID = nodes.edge.id << (nodes.node.depth - nodes.edge.depth);
