@@ -71,6 +71,8 @@ LEBDEF void leb_MergeNodeConforming_Quad(leb_Heap *leb,
                                          const leb_DiamondParent diamond);
 
 // O(1) queries
+LEBDEF int32_t leb_MinDepth(const leb_Heap *leb);
+LEBDEF int32_t leb_MaxDepth(const leb_Heap *leb);
 LEBDEF uint32_t leb_NodeCount(const leb_Heap *leb);
 LEBDEF bool leb_IsLeafNode(const leb_Heap *leb, const leb_Node node);
 LEBDEF bool leb_IsCeilNode(const leb_Heap *leb, const leb_Node node);
@@ -779,6 +781,26 @@ static void leb__SplitNode(leb_Heap *leb, const leb_Node node)
 static void leb__MergeNode(leb_Heap *leb, const leb_Node node)
 {
     leb__HeapWrite_BitField(leb, leb__RightSiblingNode(node), 0u);
+}
+
+
+/*******************************************************************************
+ * MinDepth -- Returns the min LEB depth
+ *
+ */
+LEBDEF int32_t leb_MinDepth(const leb_Heap *leb)
+{
+    return leb->minDepth;
+}
+
+
+/*******************************************************************************
+ * MaxDepth -- Returns the max LEB depth
+ *
+ */
+LEBDEF int32_t leb_MaxDepth(const leb_Heap *leb)
+{
+    return leb->maxDepth;
 }
 
 
